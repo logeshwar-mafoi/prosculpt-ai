@@ -9,6 +9,7 @@ import LandingPage from '@/pages/Landing'
 import LoginPage from '@/pages/auth/Login'
 import RegisterPage from '@/pages/auth/Register'
 import ForgotPassword from '@/pages/auth/ForgotPassword'
+import SelectRole from '@/pages/auth/SelectRole'
 
 // Student
 import StudentDashboard from '@/pages/student/Dashboard'
@@ -64,43 +65,46 @@ export default function App() {
           session.user.user_metadata?.role ||
           localStorage.getItem('prosculpt-role')
         ) as string
-        if (role) {
+
+        const path = window.location.pathname
+        const hasToken = window.location.hash.includes('access_token')
+
+        if (role && ROLE_REDIRECTS[role]) {
           localStorage.setItem('prosculpt-role', role)
           fetchProfile(session.user.id, role)
-          // Only redirect if currently on auth pages or root with hash token
-          const path = window.location.pathname
-          const hasToken = window.location.hash.includes('access_token')
           if (hasToken || path === '/' || path === '/login') {
-            window.history.replaceState(null, '', ROLE_REDIRECTS[role] || '/')
-            navigate(ROLE_REDIRECTS[role] || '/', { replace: true })
+            window.history.replaceState(null, '', ROLE_REDIRECTS[role])
+            navigate(ROLE_REDIRECTS[role], { replace: true })
           }
+        } else if (hasToken || path === '/login') {
+          // Logged in via Google but no role set yet
+          navigate('/select-role', { replace: true })
         }
       }
     })
 
-    // Listen for future auth changes (login, logout, token refresh)
-   const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-  if (event === 'SIGNED_IN' && session?.user) {
-    setUser(session.user)
-    const role = (
-      session.user.user_metadata?.role ||
-      localStorage.getItem('prosculpt-role')
-    ) as string
+    // Listen for future auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        setUser(session.user)
+        const role = (
+          session.user.user_metadata?.role ||
+          localStorage.getItem('prosculpt-role')
+        ) as string
 
-    if (role && ROLE_REDIRECTS[role]) {
-      localStorage.setItem('prosculpt-role', role)
-      fetchProfile(session.user.id, role)
-      navigate(ROLE_REDIRECTS[role], { replace: true })
-    } else {
-      // No role found — send to role selection
-      navigate('/select-role', { replace: true })
-    }
-  }
-  if (event === 'SIGNED_OUT') {
-    navigate('/login', { replace: true })
-  }
-})
-
+        if (role && ROLE_REDIRECTS[role]) {
+          localStorage.setItem('prosculpt-role', role)
+          fetchProfile(session.user.id, role)
+          navigate(ROLE_REDIRECTS[role], { replace: true })
+        } else {
+          navigate('/select-role', { replace: true })
+        }
+      }
+      if (event === 'SIGNED_OUT') {
+        localStorage.removeItem('prosculpt-role')
+        navigate('/login', { replace: true })
+      }
+    })
 
     return () => subscription.unsubscribe()
   }, [])
@@ -113,6 +117,7 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/select-role" element={<SelectRole />} />
 
         {/* Student */}
         <Route path="/student/*" element={<ProtectedRoute role="student" />}>
