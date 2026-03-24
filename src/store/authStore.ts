@@ -12,12 +12,12 @@ interface AuthState {
   setUser: (user: any) => void
   setProfile: (profile: any) => void
   logout: () => Promise<void>
-  fetchProfile: (userId: string, role: UserRole) => Promise<void>
+  fetchProfile: (userId: string, role: string) => Promise<void>
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       user: null,
       profile: null,
       role: null,
@@ -29,12 +29,17 @@ export const useAuthStore = create<AuthState>()(
         set({ user: null, profile: null, role: null })
       },
       fetchProfile: async (userId, role) => {
-        const table = role === 'student' ? 'student_profiles'
-          : role === 'employer' ? 'employer_profiles'
-          : role === 'college' ? 'college_profiles'
-          : 'admin_profiles'
-        const { data } = await supabase.from(table).select('*').eq('user_id', userId).single()
-        set({ profile: data, role })
+        const table =
+          role === 'student'  ? 'student_profiles'  :
+          role === 'employer' ? 'employer_profiles' :
+          role === 'college'  ? 'college_profiles'  :
+          'admin_profiles'
+        const { data } = await supabase
+          .from(table)
+          .select('*')
+          .eq('user_id', userId)
+          .single()
+        set({ profile: data, role: role as UserRole })
       }
     }),
     { name: 'prosculpt-auth', partialize: (s) => ({ role: s.role }) }
