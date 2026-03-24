@@ -79,23 +79,28 @@ export default function App() {
     })
 
     // Listen for future auth changes (login, logout, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        setUser(session.user)
-        const role = (
-          session.user.user_metadata?.role ||
-          localStorage.getItem('prosculpt-role')
-        ) as string
-        if (role) {
-          localStorage.setItem('prosculpt-role', role)
-          fetchProfile(session.user.id, role)
-          navigate(ROLE_REDIRECTS[role] || '/', { replace: true })
-        }
-      }
-      if (event === 'SIGNED_OUT') {
-        navigate('/login', { replace: true })
-      }
-    })
+   const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_IN' && session?.user) {
+    setUser(session.user)
+    const role = (
+      session.user.user_metadata?.role ||
+      localStorage.getItem('prosculpt-role')
+    ) as string
+
+    if (role && ROLE_REDIRECTS[role]) {
+      localStorage.setItem('prosculpt-role', role)
+      fetchProfile(session.user.id, role)
+      navigate(ROLE_REDIRECTS[role], { replace: true })
+    } else {
+      // No role found — send to role selection
+      navigate('/select-role', { replace: true })
+    }
+  }
+  if (event === 'SIGNED_OUT') {
+    navigate('/login', { replace: true })
+  }
+})
+
 
     return () => subscription.unsubscribe()
   }, [])
