@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
 
@@ -43,20 +44,59 @@ import AdminPayments from '@/pages/admin/Payments'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import AIChat from '@/components/AIChat'
 
+const ROLE_REDIRECTS: Record<string, string> = {
+  student:  '/student',
+  employer: '/employer',
+  college:  '/college',
+  admin:    '/admin',
+}
+
 export default function App() {
-  const { setUser, fetchProfile, role } = useAuthStore()
+  const { setUser, fetchProfile } = useAuthStore()
+  const navigate = useNavigate()
 
   useEffect(() => {
+    // Handle existing session on page load (including OAuth hash redirect)
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user)
-        const storedRole = localStorage.getItem('prosculpt-role') as any
-        if (storedRole) fetchProfile(session.user.id, storedRole)
+        const role = (
+          session.user.user_metadata?.role ||
+          localStorage.getItem('prosculpt-role')
+        ) as string
+        if (role) {
+          localStorage.setItem('prosculpt-role', role)
+          fetchProfile(session.user.id, role)
+          // Only redirect if currently on auth pages or root with hash token
+          const path = window.location.pathname
+          const hasToken = window.location.hash.includes('access_token')
+          if (hasToken || path === '/' || path === '/login') {
+            window.history.replaceState(null, '', ROLE_REDIRECTS[role] || '/')
+            navigate(ROLE_REDIRECTS[role] || '/', { replace: true })
+          }
+        }
       }
     })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) setUser(session.user)
+
+    // Listen for future auth changes (login, logout, token refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        setUser(session.user)
+        const role = (
+          session.user.user_metadata?.role ||
+          localStorage.getItem('prosculpt-role')
+        ) as string
+        if (role) {
+          localStorage.setItem('prosculpt-role', role)
+          fetchProfile(session.user.id, role)
+          navigate(ROLE_REDIRECTS[role] || '/', { replace: true })
+        }
+      }
+      if (event === 'SIGNED_OUT') {
+        navigate('/login', { replace: true })
+      }
     })
+
     return () => subscription.unsubscribe()
   }, [])
 
